@@ -19,9 +19,9 @@ from collections import OrderedDict
 
 from io import StringIO
 import gzip
-#response.headers.get('Content-Encoding')
 
 URL_BASE = "http://mangafox.me/"
+#http://mangafox/manga/anime/v/c/p
 
 def get_page_soup(url):
     """Download a page and return a BeautifulSoup object of the html"""
@@ -34,7 +34,6 @@ def get_page_soup(url):
     else:
         page_content = response.read()
 
-    
     soup_page = BeautifulSoup(page_content, "html.parser")
 
     return soup_page
@@ -101,21 +100,22 @@ def get_chapter_image_urls(url_fragment):
             time.sleep(0.05)
     return image_urls
 
-def get_chapter_number(url_fragment):
+def get_volume_info(url_fragment):
     """Parse the url fragment and return the chapter number."""
-    return ''.join(url_fragment.rsplit("/")[5:-1])
+    return url_fragment.rsplit("/")[5:-1]
 
-def download_urls(image_urls, manga_name, chapter_number):
+def download_urls(image_urls, manga_name, volume, chapter):
     """Download all images from a list"""
-    download_dir = '{0}/{1}/'.format(manga_name, chapter_number)
+
+    download_dir = '{0}/{1}/'.format(manga_name, volume)
     if os.path.exists(download_dir):
         shutil.rmtree(download_dir)
     os.makedirs(download_dir)
     for i, url in enumerate(image_urls):
-        filename = '.\\{0}\\{1}\\{2:03}.jpg'.format(manga_name, chapter_number, i)
+        filename = '.\\{0}\\{1}\\{2}p{3:03}.jpg'.format(manga_name, volume, chapter, i)
 
         print('Downloading {0} to {1}'.format(url, filename))
-        while True:
+        for i in range(15):
             try:
                 r = requests.get(url, stream=True, headers={'User-agent': 'Mozilla/5.0'})
                 if r.status_code == 200:
@@ -125,17 +125,18 @@ def download_urls(image_urls, manga_name, chapter_number):
             except urllib.error.HTTPError as http_err:
                 print ('HTTP error ', http_err.code, ": ", http_err.reason)
                 if http_err.code == 404:
-                    time.sleep(2)
+                    print (ulr + "does not exist")
                     break
                 time.sleep(2)
             except urllib.error.ContentTooShortError:
                 print ('The image has been retrieve only partially.')
-                time.sleep(2)
             except:
                 print ('Unknown error')
                 time.sleep(2)
             else:
                 break
+            if i == 14:
+                exit("Could not download " + ulr)
 
 def make_cbz(dirname):
     """Create CBZ files for all JPEG image files in a directory."""
@@ -157,14 +158,14 @@ def download_manga(manga_name, range_start=1, range_end=None, b_make_cbz=False, 
                                      chapter_url[0] < range_start
                                      or chapter_url[0] > range_end,
                                      chapter_urls.items()):
-        chapter_number = get_chapter_number(url)
+        volume, chapter = get_volume_info(url)
 
-        print('===============================================')
-        print('Chapter ' + chapter_number)
-        print('===============================================')
+        print('=================================================')
+        print('Volume: {0}, Chapter: {1}'.format(volume, chapter))
+        print('=================================================')
         image_urls = get_chapter_image_urls(url)
-        download_urls(image_urls, manga_name, chapter_number)
-        download_dir = './{0}/{1}'.format(manga_name, chapter_number)
+        download_urls(image_urls, manga_name, volume, chapter)
+        download_dir = './{0}/{1}'.format(manga_name, volume)
         if b_make_cbz is True:
             make_cbz(download_dir)
             if remove is True: shutil.rmtree(download_dir)
